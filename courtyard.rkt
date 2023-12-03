@@ -1,0 +1,166 @@
+#lang racket
+(require racket/gui)
+; Ryan Lee CS 135-A
+; I pledge my honor that I have abided by Stevens honor system.
+
+(define fHeight 700)
+(define fWidth 700)
+(define emptyPos '(0 0)) ; empty square index
+(define n 8) ; 2^n board size
+(define tileSize (floor (/ fWidth (expt 2 n))))
+
+(define frame (new frame%
+                   [label "Courtyard"]
+                   [width fWidth]
+                   [height fHeight]))
+
+; helper method to draw courtyard with the L tile positions
+; ltiles in form of triply nested lists: (((x1 y1) orient1) ((x2 y2) orient2)...)
+; begin executes the next 2 lines sequentially, iterate & graph until last position
+(define (draw-canvas dc lTilesPos)
+  (if (<= (length lTilesPos) 1)
+      (drawLTile dc (caaar lTilesPos) (cadaar lTilesPos) tileSize (make-object color% (random 256) (random 256) (random 256)) (cadar lTilesPos))
+
+      (begin
+        (drawLTile dc (caaar lTilesPos) (cadaar lTilesPos) tileSize (make-object color% (random 256) (random 256) (random 256)) (cadar lTilesPos))
+        (draw-canvas dc (cdr lTilesPos)))))
+
+; depending on orientation, draw 2 rectangles to form LTile
+; size is of the tile, length/width doubled depending on orientation
+(define (drawLTile dc xPos yPos size color orient)
+  (send dc set-pen color 1 'solid)
+  (send dc set-brush color 'solid)
+  (cond
+   [(= orient 1)
+    (send dc draw-rectangle
+      (- xPos size) yPos
+     (* size 2) size)
+    (send dc draw-rectangle
+      (- xPos size) (- yPos size)
+      size (* size 2))]
+   [(= orient 2)
+    (send dc draw-rectangle
+      (- xPos size) (- yPos size)
+      size (* size 2))
+    (send dc draw-rectangle
+      (- xPos size) (- yPos size)
+      (* size 2) size)]
+   [(= orient 3)
+    (send dc draw-rectangle
+      xPos (- yPos size)
+      size (* size 2))
+    (send dc draw-rectangle
+      (- xPos size) (- yPos size)
+      (* size 2) size)]
+   [(= orient 4)
+    (send dc draw-rectangle
+      (- xPos size) yPos
+      (* size 2) size)
+    (send dc draw-rectangle
+      xPos (- yPos size)
+      size (* size 2))])
+ )
+
+; for width <= 2, gets position of empty tile relative to canvas
+(define (getPotEmptyPos offsetX offsetY centerPos) ; centerPos relative to subboard
+  (list (+ (list-ref centerPos 0) offsetX) (+ (list-ref centerPos 1) offsetY)))
+
+; for width > 2
+(define (getEmptyPosFromLTile tileX tileY quad orient)
+  (cond
+    [(= orient 1)
+     (cond [(= quad 1)
+            (list (- tileX tileSize) (- tileY tileSize))]
+           [(= quad 3)
+            (list (- tileX tileSize) tileY)]
+           [(= quad 4)
+            (list tileX tileY)])]
+    [(= orient 2)
+     (cond [(= quad 1)
+            (list (- tileX tileSize) (- tileY tileSize))]
+           [(= quad 2)
+            (list tileX (- tileY tileSize))]
+           [(= quad 3)
+            (list (- tileX tileSize) tileY)])]
+    [(= orient 3)
+     (cond [(= quad 1)
+            (list (- tileX tileSize) (- tileY tileSize))]
+           [(= quad 2)
+            (list tileX (- tileY tileSize))]
+           [(= quad 4)
+            (list tileX tileY)])]
+    [(= orient 4)
+     (cond [(= quad 2)
+            (list tileX (- tileY tileSize))]
+           [(= quad 3)
+            (list (- tileX tileSize) tileY)]
+           [(= quad 4)
+            (list tileX tileY)])]
+    )
+  )
+
+; get new position of center, 4 cases based on quadrants (1 top left, 2 top right, 3 bottom left, 4 bottom right)
+(define (getNewCenter oldCenter quad width)
+  (cond [(= quad 1)
+         (list (- (list-ref oldCenter 0) (* tileSize (/ width 4))) (- (list-ref oldCenter 1) (* tileSize (/ width 4))))]
+        [(= quad 2)
+         (list (+ (list-ref oldCenter 0) (* tileSize (/ width 4))) (- (list-ref oldCenter 1) (* tileSize (/ width 4))))]
+        [(= quad 3)
+         (list (- (list-ref oldCenter 0) (* tileSize (/ width 4))) (+ (list-ref oldCenter 1) (* tileSize (/ width 4))))]
+        [(= quad 4)
+         (list (+ (list-ref oldCenter 0) (* tileSize (/ width 4))) (+ (list-ref oldCenter 1) (* tileSize (/ width 4))))]))
+
+; main function to return all positions of LTiles
+; base case canvas width <=2, else find quadrant of empty tile from centerPos
+; base case returns 1 position, else return 4 positions from 4 quadrants
+(define (genTilePos emptyPos centerPos width)
+  (if (<= width 2)
+          (cond
+            [(equal? emptyPos (getPotEmptyPos 0 (* -1 tileSize) centerPos))
+             (list (list centerPos 1))]
+            [(equal? emptyPos (getPotEmptyPos 0 0 centerPos))
+             (list (list centerPos 2))]
+            [(equal? emptyPos (getPotEmptyPos (* -1 tileSize) 0 centerPos))
+             (list (list centerPos 3))]
+            [(equal? emptyPos (getPotEmptyPos (* -1 tileSize) (* -1 tileSize) centerPos))
+             (list (list centerPos 4))])
+
+          ; else:
+          (cond
+            ; quadrant 1
+            [(and (< (list-ref emptyPos 0) (list-ref centerPos 0)) (< (list-ref emptyPos 1) (list-ref centerPos 1)))
+             (append (list (list centerPos 4))
+                     (genTilePos emptyPos (getNewCenter centerPos 1 width) (/ width 2))
+                     (genTilePos (getEmptyPosFromLTile (list-ref centerPos 0) (list-ref centerPos 1) 2 4) (getNewCenter centerPos 2 width) (/ width 2))
+                     (genTilePos (getEmptyPosFromLTile (list-ref centerPos 0) (list-ref centerPos 1) 3 4) (getNewCenter centerPos 3 width) (/ width 2))
+                     (genTilePos (getEmptyPosFromLTile (list-ref centerPos 0) (list-ref centerPos 1) 4 4) (getNewCenter centerPos 4 width) (/ width 2)))]
+            ; quadrant 2
+            [(and (>= (list-ref emptyPos 0) (list-ref centerPos 0)) (< (list-ref emptyPos 1) (list-ref centerPos 1)))
+             (append (list (list centerPos 1))
+                     (genTilePos (getEmptyPosFromLTile (list-ref centerPos 0) (list-ref centerPos 1) 1 1) (getNewCenter centerPos 1 width) (/ width 2))
+                     (genTilePos emptyPos (getNewCenter centerPos 2 width) (/ width 2))
+                     (genTilePos (getEmptyPosFromLTile (list-ref centerPos 0) (list-ref centerPos 1) 3 1) (getNewCenter centerPos 3 width) (/ width 2))
+                     (genTilePos (getEmptyPosFromLTile (list-ref centerPos 0) (list-ref centerPos 1) 4 1) (getNewCenter centerPos 4 width) (/ width 2)))]
+            ; quadrant 3
+            [(and (< (list-ref emptyPos 0) (list-ref centerPos 0)) (>= (list-ref emptyPos 1) (list-ref centerPos 1)))
+             (append (list (list centerPos 3))
+                     (genTilePos (getEmptyPosFromLTile (list-ref centerPos 0) (list-ref centerPos 1) 1 3) (getNewCenter centerPos 1 width) (/ width 2))
+                     (genTilePos (getEmptyPosFromLTile (list-ref centerPos 0) (list-ref centerPos 1) 2 3) (getNewCenter centerPos 2 width) (/ width 2))
+                     (genTilePos emptyPos (getNewCenter centerPos 3 width) (/ width 2))
+                     (genTilePos (getEmptyPosFromLTile (list-ref centerPos 0) (list-ref centerPos 1) 4 3) (getNewCenter centerPos 4 width) (/ width 2)))]
+            ; quadrant 4
+            [(and (>= (list-ref emptyPos 0) (list-ref centerPos 0)) (>= (list-ref emptyPos 1) (list-ref centerPos 1)))
+             (append (list (list centerPos 2))
+                     (genTilePos (getEmptyPosFromLTile (list-ref centerPos 0) (list-ref centerPos 1) 1 2) (getNewCenter centerPos 1 width) (/ width 2))
+                     (genTilePos (getEmptyPosFromLTile (list-ref centerPos 0) (list-ref centerPos 1) 2 2) (getNewCenter centerPos 2 width) (/ width 2))
+                     (genTilePos (getEmptyPosFromLTile (list-ref centerPos 0) (list-ref centerPos 1) 3 2) (getNewCenter centerPos 3 width) (/ width 2))
+                     (genTilePos emptyPos (getNewCenter centerPos 4 width) (/ width 2)))]
+            )))
+
+; draw canvas
+(new canvas% [parent frame]
+             [paint-callback
+              (lambda (canvas dc)
+                (draw-canvas dc (genTilePos (list (* (list-ref emptyPos 0) tileSize) (* (list-ref emptyPos 1) tileSize)) (list (* (/ (expt 2 n) 2) tileSize) (* (/ (expt 2 n) 2) tileSize)) (expt 2 n))))])
+(send frame show #t)
+
