@@ -5,6 +5,7 @@ Imagine a perfect square courtyard divided into 2^n x 2^n squares. We need to ti
 I used Racket to implement a recursive solution to this problem. I leveraged the divide-and-conquer approach by breaking down the problem into quadrants until reaching the base case. At each recursive step, I divided the courtyard into four quadrants and checked for the position of the untiled square. If the untiled square was in a particular quadrant, I recursively applied the tiling algorithm to that quadrant.
 - One of my attempts, courtyardBroken.rkt, resulted in a fractal-like picture (first picture below). Very cool!
 - The final attempt, courtyard.rkt, is the working solution (picture at the bottom).
+- The missing tile in both these images are at the top left corner: a white square.
 
 ![courtyard_pregen.png](courtyard_pregen.png)
 <br><br>
